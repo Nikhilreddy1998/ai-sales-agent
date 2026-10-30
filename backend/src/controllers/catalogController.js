@@ -2,7 +2,7 @@ import { catalogService } from '../services/catalogService.js';
 
 export const getCatalog = async (req, res, next) => {
   try {
-    const { category, inStock, q } = req.query;
+    const { q } = req.query;
 
     if (q) {
       const matched = catalogService.matchProducts(q);
@@ -13,11 +13,7 @@ export const getCatalog = async (req, res, next) => {
       });
     }
 
-    const filter = {};
-    if (category) filter.category = category;
-    if (inStock !== undefined) filter.inStock = inStock === 'true';
-
-    const products = catalogService.getCatalog(filter);
+    const products = catalogService.getCatalog();
 
     return res.json({
       success: true,
@@ -29,15 +25,15 @@ export const getCatalog = async (req, res, next) => {
   }
 };
 
-export const getProductById = async (req, res, next) => {
+export const getProductBySku = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const product = catalogService.getProductById(id);
+    const product = catalogService.getProductBySku(id);
 
     if (!product) {
       return res.status(404).json({
         success: false,
-        error: `Product with ID "${id}" was not found.`,
+        error: `Product with SKU "${id}" was not found.`,
       });
     }
 

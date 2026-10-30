@@ -1,14 +1,24 @@
-import React from 'react';
-import { ShoppingCart, CheckCircle2, Tag, ShieldCheck, FileText, ArrowRight } from 'lucide-react';
+import React, { useState } from 'react';
+import { ShoppingCart, CheckCircle2, Tag, ShieldCheck, FileText, ArrowRight, Zap, Check } from 'lucide-react';
 
-export default function BookingSummary({ bookingDraft, confirmedBooking, onSimulateOrder }) {
-  const hasItems = bookingDraft?.items && bookingDraft.items.length > 0;
-  const pricing = bookingDraft?.pricing || {
-    subtotal: 0,
-    discountPercentage: 0,
-    discountAmount: 0,
-    finalPrice: 0,
-    appliedRules: [],
+export default function BookingSummary({
+  activeQuotation,
+  confirmedBooking,
+  customer,
+  onConfirmBooking,
+  onSimulateQuote,
+  onTriggerObjection,
+  isSubmitting,
+}) {
+  const [customerName, setCustomerName] = useState(customer?.name || '');
+  const [customerEmail, setCustomerEmail] = useState(customer?.email || '');
+
+  const hasQuote = Boolean(activeQuotation);
+
+  const handleConfirmClick = () => {
+    const finalName = customerName || customer?.name || 'Customer';
+    const finalEmail = customerEmail || customer?.email || 'customer@example.com';
+    onConfirmBooking({ name: finalName, email: finalEmail });
   };
 
   return (
@@ -16,13 +26,17 @@ export default function BookingSummary({ bookingDraft, confirmedBooking, onSimul
       <div className="card-header">
         <div className="card-title-group">
           <ShoppingCart size={18} className="text-accent" />
-          <h2 className="card-title">Booking Summary</h2>
+          <h2 className="card-title">Quotation & Booking</h2>
         </div>
-        {confirmedBooking && (
+        {confirmedBooking ? (
           <span className="badge-success">
             <CheckCircle2 size={13} /> Confirmed
           </span>
-        )}
+        ) : activeQuotation ? (
+          <span className="session-tag" title="Active Quotation ID">
+            {activeQuotation.quotationId}
+          </span>
+        ) : null}
       </div>
 
       {/* Confirmed Booking Display */}
@@ -50,23 +64,24 @@ export default function BookingSummary({ bookingDraft, confirmedBooking, onSimul
               <span className="detail-value">{confirmedBooking.customer?.email}</span>
             </div>
             <div className="detail-item">
-              <span className="detail-label">Status</span>
-              <span className="detail-value text-success">{confirmedBooking.status}</span>
+              <span className="detail-label">Quotation Ref</span>
+              <span className="detail-value font-mono">{confirmedBooking.quotationId}</span>
             </div>
             <div className="detail-item">
-              <span className="detail-label">Booked At</span>
-              <span className="detail-value">
-                {new Date(confirmedBooking.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </span>
+              <span className="detail-label">Status</span>
+              <span className="detail-value text-success">{confirmedBooking.status}</span>
             </div>
           </div>
 
           <div className="confirmed-items-list">
-            <span className="section-subtitle">Items Booked:</span>
+            <span className="section-subtitle">Booked Solution:</span>
             {confirmedBooking.items.map((item, idx) => (
               <div key={idx} className="summary-item-row">
-                <span>{item.name} × {item.quantity}</span>
-                <span>${item.itemTotal.toFixed(2)}</span>
+                <div>
+                  <span className="item-name">{item.name} ({item.tier})</span>
+                  <span className="item-meta">{item.formula}</span>
+                </div>
+                <span className="item-total">${item.itemTotal?.toFixed(2)}</span>
               </div>
             ))}
           </div>
@@ -78,56 +93,59 @@ export default function BookingSummary({ bookingDraft, confirmedBooking, onSimul
             </div>
             {confirmedBooking.pricing.discountAmount > 0 && (
               <div className="price-row text-discount">
-                <span>Discount ({confirmedBooking.pricing.discountPercentage}%)</span>
+                <span>Discount ({confirmedBooking.pricing.discountPercentage}% - {confirmedBooking.pricing.promoCode})</span>
                 <span>-${confirmedBooking.pricing.discountAmount.toFixed(2)}</span>
               </div>
             )}
             <div className="price-row total-row">
-              <span>Final Price</span>
+              <span>Final Paid Price</span>
               <span className="final-price-value">${confirmedBooking.pricing.finalPrice.toFixed(2)}</span>
             </div>
           </div>
         </div>
-      ) : (
-        /* Draft / Live Calculation State */
+      ) : hasQuote ? (
+        /* Active Quotation Breakdown */
         <div className="draft-booking-view">
-          {hasItems ? (
-            <div className="draft-items-list">
-              <span className="section-subtitle">Selected Items:</span>
-              {bookingDraft.items.map((item, idx) => (
-                <div key={idx} className="summary-item-row">
-                  <div>
-                    <span className="item-name">{item.name}</span>
-                    <span className="item-meta">
-                      Qty: {item.quantity} × ${Number(item.price).toFixed(2)}
-                    </span>
-                  </div>
-                  <span className="item-total">
-                    ${(Number(item.price) * Number(item.quantity)).toFixed(2)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="empty-cart-state">
-              <FileText size={28} className="text-muted" />
-              <p>No items in draft yet. Inquire via the chat agent or test a sample order below.</p>
-              <button
-                onClick={onSimulateOrder}
-                className="btn-outline-small"
-                id="btn-sample-draft"
-              >
-                <span>Load Sample Order (5 Starter Cloud Suites)</span>
-                <ArrowRight size={14} />
-              </button>
-            </div>
-          )}
+          <div className="draft-items-list">
+            <span className="section-subtitle">Solution Specification:</span>
+            <div className="quote-spec-card">
+              <div className="spec-header">
+                <span className="spec-sku">{activeQuotation.sku}</span>
+                <span className="spec-tier-badge">{activeQuotation.tier} TIER</span>
+              </div>
+              <h4 className="spec-product-name">{activeQuotation.productName}</h4>
+              
+              <div className="formula-callout" title="Capacity calculation formula">
+                <Zap size={14} className="text-accent" />
+                <span className="font-mono">{activeQuotation.formula}</span>
+              </div>
 
-          {/* Pricing & Deterministic Discount Breakdown */}
+              <div className="spec-meta-grid">
+                <div>
+                  <span className="detail-label">Required Capacity</span>
+                  <span className="detail-value">{activeQuotation.requiredCapacity}</span>
+                </div>
+                <div>
+                  <span className="detail-label">Unit Capacity</span>
+                  <span className="detail-value">{activeQuotation.capacityPerUnit}</span>
+                </div>
+                <div>
+                  <span className="detail-label">Calculated Units</span>
+                  <span className="detail-value font-mono font-bold">{activeQuotation.units}</span>
+                </div>
+                <div>
+                  <span className="detail-label">Unit Price</span>
+                  <span className="detail-value">${activeQuotation.unitPrice.toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Pricing & Objection Progression Breakdown */}
           <div className="pricing-breakdown">
             <div className="price-row">
-              <span>Subtotal</span>
-              <span id="price-subtotal">${pricing.subtotal.toFixed(2)}</span>
+              <span>Subtotal ({activeQuotation.units} × ${activeQuotation.unitPrice})</span>
+              <span className="font-mono">${activeQuotation.subtotal.toFixed(2)}</span>
             </div>
 
             <div className="price-row">
@@ -135,27 +153,118 @@ export default function BookingSummary({ bookingDraft, confirmedBooking, onSimul
                 <Tag size={14} />
                 <span>Deterministic Discount</span>
               </span>
-              <span className={pricing.discountAmount > 0 ? 'text-discount' : 'text-muted'}>
-                {pricing.discountPercentage > 0 ? `-${pricing.discountPercentage}% (-$${pricing.discountAmount.toFixed(2)})` : '$0.00'}
+              <span className={activeQuotation.discountAmount > 0 ? 'text-discount font-mono' : 'text-muted'}>
+                {activeQuotation.discountPercent > 0
+                  ? `-${activeQuotation.discountPercent}% (-$${activeQuotation.discountAmount.toFixed(2)})`
+                  : '0% (Standard Rate)'}
               </span>
             </div>
 
-            {pricing.appliedRules && pricing.appliedRules.length > 0 && (
+            {activeQuotation.discountLabel && (
               <div className="rules-tags">
-                {pricing.appliedRules.map((rule, idx) => (
-                  <span key={idx} className="rule-chip">
-                    {rule}
+                <span className="rule-chip">
+                  {activeQuotation.discountLabel}
+                </span>
+                {activeQuotation.promoCode && (
+                  <span className="rule-chip font-mono font-bold">
+                    CODE: {activeQuotation.promoCode}
                   </span>
-                ))}
+                )}
               </div>
             )}
 
             <div className="price-row total-row">
-              <span>Final Price</span>
+              <span>Final Authorized Price</span>
               <span className="final-price-value" id="price-final">
-                ${pricing.finalPrice.toFixed(2)}
+                ${activeQuotation.finalPrice.toFixed(2)}
               </span>
             </div>
+          </div>
+
+          {/* Customer Input & Confirmation Section */}
+          <div className="booking-action-section">
+            <span className="section-subtitle">Confirm Customer Details:</span>
+            <div className="customer-input-grid">
+              <input
+                type="text"
+                placeholder="Full Name (e.g. John Doe)"
+                value={customerName || customer?.name || ''}
+                onChange={(e) => setCustomerName(e.target.value)}
+                className="input-subtle"
+                id="input-customer-name"
+              />
+              <input
+                type="email"
+                placeholder="Work Email (e.g. john@company.com)"
+                value={customerEmail || customer?.email || ''}
+                onChange={(e) => setCustomerEmail(e.target.value)}
+                className="input-subtle"
+                id="input-customer-email"
+              />
+            </div>
+
+            <button
+              onClick={handleConfirmClick}
+              disabled={isSubmitting}
+              className="btn-confirm-booking"
+              id="btn-confirm-booking"
+            >
+              <Check size={16} />
+              <span>{isSubmitting ? 'Processing Booking...' : 'Explicitly Confirm & Book Quotation'}</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        /* Empty / Starter State */
+        <div className="empty-cart-state">
+          <FileText size={32} className="text-muted" />
+          <p>No active quotation yet. Request a product quote in chat or select a test scenario below.</p>
+          
+          <div className="scenario-buttons">
+            <button
+              onClick={() => onSimulateQuote('SKU_MESH_WIFI6', 'STD', 5)}
+              className="btn-outline-small"
+            >
+              <span>Quote AeroMesh (5 zones, STD)</span>
+              <ArrowRight size={13} />
+            </button>
+            <button
+              onClick={() => onSimulateQuote('SKU_TEAM_HUB', 'PRO', 7)}
+              className="btn-outline-small"
+            >
+              <span>Quote SyncHub (7 teams, PRO)</span>
+              <ArrowRight size={13} />
+            </button>
+            <button
+              onClick={() => onSimulateQuote('SKU_AIRPODS_PRO2', 'CARE', 4)}
+              className="btn-outline-small"
+            >
+              <span>Quote AirPods Pro (4 users, CARE)</span>
+              <ArrowRight size={13} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Objection Testing Controls for Live Interview Demo */}
+      {hasQuote && !confirmedBooking && (
+        <div className="objection-testing-toolbar">
+          <span className="toolbar-label">Interview Objection Progression:</span>
+          <div className="toolbar-buttons">
+            <button
+              onClick={() => onTriggerObjection(1)}
+              className={`btn-toolbar ${activeQuotation.objectionLevel >= 1 ? 'btn-toolbar-active' : ''}`}
+              title="Level 1: SAVE10 (10% off)"
+            >
+              1st Objection (SAVE10)
+            </button>
+            <button
+              onClick={() => onTriggerObjection(2)}
+              className={`btn-toolbar ${activeQuotation.objectionLevel >= 2 ? 'btn-toolbar-active' : ''}`}
+              title="Level 2: CLOSENOW15 (15% off)"
+            >
+              2nd Objection (CLOSENOW15)
+            </button>
           </div>
         </div>
       )}

@@ -1,8 +1,8 @@
 import { randomUUID } from 'crypto';
 
 /**
- * In-memory session store for conversation and cart/booking state.
- * In production or scaling setups, this could be backed by Redis or a database.
+ * In-memory session store managing conversation history,
+ * customer profile, price objection counters, and active quotations.
  */
 class SessionService {
   constructor() {
@@ -10,7 +10,7 @@ class SessionService {
   }
 
   /**
-   * Retrieves an existing session or creates a new one if not found.
+   * Retrieves an existing session or creates a new one.
    * @param {string} [sessionId]
    * @returns {object} Session data
    */
@@ -19,12 +19,18 @@ class SessionService {
       return this.sessions.get(sessionId);
     }
 
-    const id = sessionId || randomUUID();
+    const id = sessionId || `sess-${randomUUID().substring(0, 8)}`;
     const newSession = {
       id,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       messages: [],
+      objectionCount: 0, // 0: Initial (0%), 1: First Objection (SAVE10, 10%), 2: Second Objection (CLOSENOW15, 15%)
+      activeQuotation: null, // Immutable server-generated quotation
+      customer: {
+        name: null,
+        email: null,
+      },
       currentCart: {
         items: [],
         subtotal: 0,
@@ -35,8 +41,7 @@ class SessionService {
       confirmedBooking: null,
       context: {
         pendingConfirmation: false,
-        customerName: null,
-        customerEmail: null,
+        isConfirmed: false,
       },
     };
 
@@ -50,6 +55,63 @@ class SessionService {
    */
   getSession(sessionId) {
     return this.sessions.get(sessionId) || null;
+  }
+
+  /**
+   * Records a user objection and increments the objection level (capped at 2).
+   * @param {string} sessionId
+   * @returns {number} New objection count
+   */
+  registerPriceObjection(sessionId) {
+    const session = this.getOrCreateSession(sessionId);
+    session.objectionCount = Math.min(2, (session.objectionCount || 0) + 1);
+    session.updatedAt = new Date().toISOString();
+    return session.objectionCount;
+  }
+
+  /**
+   * Updates or locks the active quotation for the session.
+   * @param {string} sessionId
+   * @param {object} quotation
+   */
+  setActiveQuotation(sessionId, quotation) {
+    const session = this.getOrCreateSession(sessionId);
+    session.activeQuotation = quotation;
+    session.currentCart = {
+      items: [
+        {
+          sku: quotation.sku,
+          name: quotation.productName,
+          tier: quotation.tier,
+          quantity: quotation.units,
+          price: quotation.unitPrice,
+          requiredCapacity: quotation.requiredCapacity,
+          itemTotal: quotation.subtotal,
+        },
+      ],
+      subtotal: quotation.subtotal,
+      discountPercentage: quotation.discountPercent,
+      discountAmount: quotation.discountAmount,
+      promoCode: quotation.promoCode,
+      finalPrice: quotation.finalPrice,
+      quotationId: quotation.quotationId,
+    };
+    session.context.pendingConfirmation = true;
+    session.updatedAt = new Date().toISOString();
+    return session.activeQuotation;
+  }
+
+  /**
+   * Updates customer profile in session.
+   * @param {string} sessionId
+   * @param {object} customerData
+   */
+  updateCustomer(sessionId, customerData = {}) {
+    const session = this.getOrCreateSession(sessionId);
+    if (customerData.name) session.customer.name = customerData.name.trim();
+    if (customerData.email) session.customer.email = customerData.email.trim();
+    session.updatedAt = new Date().toISOString();
+    return session.customer;
   }
 
   /**
@@ -71,21 +133,6 @@ class SessionService {
     session.messages.push(message);
     session.updatedAt = new Date().toISOString();
     return message;
-  }
-
-  /**
-   * Updates session cart / order draft state.
-   * @param {string} sessionId
-   * @param {object} cartData
-   */
-  updateCart(sessionId, cartData) {
-    const session = this.getOrCreateSession(sessionId);
-    session.currentCart = {
-      ...session.currentCart,
-      ...cartData,
-    };
-    session.updatedAt = new Date().toISOString();
-    return session.currentCart;
   }
 
   /**

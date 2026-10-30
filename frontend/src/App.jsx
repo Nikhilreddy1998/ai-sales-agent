@@ -11,31 +11,22 @@ export default function App() {
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [logs, setLogs] = useState([]);
-  const [bookingDraft, setBookingDraft] = useState({
-    items: [],
-    pricing: {
-      subtotal: 0,
-      discountPercentage: 0,
-      discountAmount: 0,
-      finalPrice: 0,
-      appliedRules: [],
-    },
-  });
+  const [activeQuotation, setActiveQuotation] = useState(null);
   const [confirmedBooking, setConfirmedBooking] = useState(null);
+  const [customer, setCustomer] = useState({ name: '', email: '' });
 
   // Subscribe to real-time API activity events
   useEffect(() => {
     const unsubscribe = subscribeToApiLogs((newLog) => {
       setLogs((prevLogs) => {
-        // If updating an existing pending log
         const existingIdx = prevLogs.findIndex((l) => l.id === newLog.id);
         if (existingIdx !== -1) {
           const updated = [...prevLogs];
           updated[existingIdx] = newLog;
           return updated;
         }
-        // Otherwise prepend new log at top
         return [newLog, ...prevLogs.slice(0, 49)];
       });
     });
@@ -51,7 +42,6 @@ export default function App() {
         if (health && health.status === 'ok') {
           setIsConnected(true);
         }
-        // Fetch catalog to verify GET integration and populate activity log
         await api.getCatalog();
       } catch (err) {
         console.warn('[App Init] Backend not reachable yet:', err.message);
@@ -85,29 +75,99 @@ export default function App() {
 
       setMessages((prev) => [...prev, agentMessage]);
 
-      if (response.currentCart && response.currentCart.items?.length > 0) {
-        setBookingDraft({
-          items: response.currentCart.items,
-          pricing: {
-            subtotal: response.currentCart.subtotal || 0,
-            discountPercentage: response.currentCart.discountPercentage || 0,
-            discountAmount: response.currentCart.discountAmount || 0,
-            finalPrice: response.currentCart.finalPrice || 0,
-            appliedRules: response.currentCart.appliedRules || [],
-          },
-        });
+      if (response.activeQuotation) {
+        setActiveQuotation(response.activeQuotation);
+      }
+
+      if (response.customer) {
+        setCustomer(response.customer);
+      }
+
+      if (response.confirmedBooking) {
+        setConfirmedBooking(response.confirmedBooking);
       }
     } catch (err) {
       console.error('[App] Chat error:', err);
       const errorMessage = {
         id: Math.random().toString(36).substring(2, 9),
         role: 'model',
-        content: `Error communicating with sales backend: ${err.message}. Please verify the backend server is running on port 5000.`,
+        content: `Error communicating with sales backend: ${err.message}. Please verify the backend is running on port 5000.`,
         timestamp: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Explicit Booking Confirmation (Requirement D)
+  const handleConfirmBooking = async (customerData) => {
+    if (!activeQuotation) return;
+    setIsSubmitting(true);
+
+    try {
+      const response = await api.createBooking({
+        sessionId,
+        quotationId: activeQuotation.quotationId,
+        customer: customerData,
+        isConfirmed: true,
+      });
+
+      if (response.booking) {
+        setConfirmedBooking(response.booking);
+        setCustomer(customerData);
+
+        const confirmationMsg = {
+          id: Math.random().toString(36).substring(2, 9),
+          role: 'model',
+          content: `🎉 Booking confirmed! Your reference ID is **${response.booking.bookingId}**. An order confirmation for ${response.booking.items[0]?.name} ($${response.booking.pricing.finalPrice}) has been sent to ${customerData.email}.`,
+          timestamp: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, confirmationMsg]);
+      }
+    } catch (err) {
+      alert(`Booking Error: ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Simulate or calculate a specific quote scenario
+  const handleSimulateQuote = async (sku, tier, capacity) => {
+    try {
+      const res = await api.calculatePricing({
+        sku,
+        tier,
+        requiredCapacity: capacity,
+        objectionCount: 0,
+      });
+
+      if (res && res.quotation) {
+        setActiveQuotation(res.quotation);
+        setConfirmedBooking(null);
+      }
+    } catch (err) {
+      console.error('Failed to calculate quotation:', err);
+    }
+  };
+
+  // Trigger objection progression level (Level 1: SAVE10, Level 2: CLOSENOW15)
+  const handleTriggerObjection = async (level) => {
+    if (!activeQuotation) return;
+
+    try {
+      const res = await api.calculatePricing({
+        sku: activeQuotation.sku,
+        tier: activeQuotation.tier,
+        requiredCapacity: activeQuotation.requiredCapacity,
+        objectionCount: level,
+      });
+
+      if (res && res.quotation) {
+        setActiveQuotation(res.quotation);
+      }
+    } catch (err) {
+      console.error('Failed to trigger objection discount:', err);
     }
   };
 
@@ -123,35 +183,9 @@ export default function App() {
     const newId = 'sess-' + Math.random().toString(36).substring(2, 10);
     setSessionId(newId);
     setMessages([]);
-    setBookingDraft({
-      items: [],
-      pricing: {
-        subtotal: 0,
-        discountPercentage: 0,
-        discountAmount: 0,
-        finalPrice: 0,
-        appliedRules: [],
-      },
-    });
+    setActiveQuotation(null);
     setConfirmedBooking(null);
-  };
-
-  // Simulate loading sample order items into draft & calculating deterministic discount
-  const handleSimulateOrder = async () => {
-    try {
-      const sampleItems = [
-        { productId: 'prod-001', name: 'Starter Cloud Suite', price: 49.99, quantity: 5 },
-      ];
-      const res = await api.calculatePricing(sampleItems, 'WELCOME20');
-      if (res && res.pricing) {
-        setBookingDraft({
-          items: sampleItems,
-          pricing: res.pricing,
-        });
-      }
-    } catch (err) {
-      console.error('Failed to simulate sample pricing:', err);
-    }
+    setCustomer({ name: '', email: '' });
   };
 
   const handleClearLogs = () => {
@@ -177,9 +211,13 @@ export default function App() {
         {/* Right Column: Booking Summary & Activity Logs */}
         <div className="side-panels-stack">
           <BookingSummary
-            bookingDraft={bookingDraft}
+            activeQuotation={activeQuotation}
             confirmedBooking={confirmedBooking}
-            onSimulateOrder={handleSimulateOrder}
+            customer={customer}
+            onConfirmBooking={handleConfirmBooking}
+            onSimulateQuote={handleSimulateQuote}
+            onTriggerObjection={handleTriggerObjection}
+            isSubmitting={isSubmitting}
           />
 
           <ApiActivityLog

@@ -46,6 +46,39 @@ flowchart LR
 
 ---
 
+## 📋 Mandatory Interview Specifications & Business Rules
+
+### A. Official Product Catalog
+| SKU | Name | Unit Capacity | STD Price | Tier 2 Price |
+| :--- | :--- | :--- | :--- | :--- |
+| **`SKU_AIRPODS_PRO2`** | AirPods Pro 2nd Gen | 1 user | **$249** | CARE: **$279** |
+| **`SKU_MESH_WIFI6`** | AeroMesh Wi-Fi 6E Home Pack | 2 coverage zones | **$399** | PRO: **$499** |
+| **`SKU_TEAM_HUB`** | SyncHub Conference Bar | 3 room units / teams | **$899** | PRO: **$1,150** |
+
+### B. Capacity-Based Quantity Calculation
+Required units are calculated strictly using:
+$$\text{Units} = \lceil \text{requiredCapacity} / \text{max\_capacity\_per\_unit} \rceil$$
+*(e.g., AeroMesh with 5 coverage zones requires $\lceil 5 / 2 \rceil = 3$ units).*
+
+### C. Deterministic Discount Progression State Machine
+Discounts are governed server-side and progress based on customer price objections:
+1. **Initial Quote:** `0%` discount, promo code: `null`.
+2. **First Price Objection:** `10%` discount, promo code: `SAVE10`.
+3. **Second Price Objection:** `15%` discount, promo code: `CLOSENOW15`.
+4. **Ceiling Rule:** Under no circumstances can any discount exceed **15%**.
+
+### D. Quotation Lock & Duplicate-Proof Booking
+- Bookings must be tied to an immutable, server-generated `quotationId`.
+- Bookings require explicit customer approval (`isConfirmed: true`).
+- A 5-minute sliding TTL idempotency window prevents duplicate booking submissions.
+
+### E. AI Separation of Concerns
+- Gemini handles natural language understanding and consultation.
+- Gemini returns structured intent flags (`hasPriceObjection`, `isConfirmingBooking`, `sku`, `requiredCapacity`).
+- All calculations are performed by Express services.
+
+---
+
 ## 🏛️ Core Capabilities & Pillars
 
 | Pillar | Description | Implementation File |

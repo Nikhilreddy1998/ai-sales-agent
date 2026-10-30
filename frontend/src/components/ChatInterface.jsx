@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, User, Bot, Sparkles, AlertCircle } from 'lucide-react';
+import { Send, User, Bot, Sparkles } from 'lucide-react';
 
 const SUGGESTIONS = [
-  'What cloud packages do you have in the catalog?',
-  'I need 10 licenses of the AI Sales Copilot. Can I get a discount?',
-  'What is the pricing for Starter Cloud Suite if I buy 6 units with promo WELCOME20?',
-  'Please prepare a booking for 5 Starter Cloud Suites for Jane Doe (jane@example.com).',
+  'I need Wi-Fi coverage for 5 zones with AeroMesh Wi-Fi 6E.',
+  'That price is a bit high for our budget. Can you offer a discount?',
+  'I need 4 AirPods Pro 2nd Gen units with AppleCare (CARE tier).',
+  'Yes, please confirm and book this order for John Doe (john@example.com).',
 ];
 
 export default function ChatInterface({ messages, onSendMessage, isLoading }) {
@@ -48,9 +48,9 @@ export default function ChatInterface({ messages, onSendMessage, isLoading }) {
             <div className="empty-icon-wrap">
               <Sparkles size={32} />
             </div>
-            <h3>Start your consultation</h3>
+            <h3>Consultative Sales Agent</h3>
             <p>
-              Ask about product tiers, deterministic volume discounts, or initiate an order booking.
+              Inquire about hardware SKUs, specify required capacity, discuss pricing objections, or confirm an order.
             </p>
 
             <div className="suggestions-list">
@@ -81,7 +81,9 @@ export default function ChatInterface({ messages, onSendMessage, isLoading }) {
                   <div className="message-header-meta">
                     <span className="sender-name">{isUser ? 'You' : 'AI Sales Agent'}</span>
                     <span className="message-time">
-                      {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                      {msg.timestamp
+                        ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        : ''}
                     </span>
                   </div>
                   <div className="message-body">{msg.content}</div>
@@ -114,7 +116,7 @@ export default function ChatInterface({ messages, onSendMessage, isLoading }) {
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask a question or request a booking..."
+          placeholder="Ask about products, negotiate price, or confirm your booking..."
           className="chat-input"
           id="chat-user-input"
           disabled={isLoading}
